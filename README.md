@@ -43,7 +43,7 @@ To enforce rules in casbin, you need two configuration files:
 
 2. **Model:** contains the layout, execution, and conditions for authorization. This is defined in special syntax based on the PERM (Policy, Effect, Request, Matchers) metamodel.
 
-We pass these files to a casbin enforcer and then use the enforce to rules for a given, actual `{subject, object, action}` request set like so:
+We pass these files to a casbin enforcer and then use it to enforce rules for a given, actual `{subject, object, action}` request set like so:
 
 ```go
     // casbin enforcer
