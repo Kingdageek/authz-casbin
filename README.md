@@ -58,3 +58,7 @@ We pass these files to a casbin enforcer and then use the enforce to rules for a
 To understand the syntax/structure of the *model.CONF* file, read more [here](https://casbin.org/docs/understanding-casbin-detail#how-does-casbin-work)
 
 Casbin can be used to implement the authorization models listed above or even a hybrid model combining elements from each of those as we've done in this example.
+
+### Implementation Details
+
+With the fundamentals, however brief it was, out of the way, we can move on to applying them.
