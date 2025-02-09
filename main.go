@@ -2,15 +2,79 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2/model"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 )
+
+type PolicyGroup string
+
+const (
+	User PolicyGroup = "user"
+	Team PolicyGroup = "team"
+	Dept PolicyGroup = "dept"
+	Org PolicyGroup = "org"
+	Public PolicyGroup = "public"
+)
+
+var ModelConf string = fmt.Sprintf(`
+[request_definition]
+r = sub, obj, act
+
+[policy_definition]
+p = sub, obj, act, pgrp, orgId
+
+[policy_effect]
+e = some(where (p.eft == allow))
+
+[role_definition]
+g = _, _
+
+# 7-step matching: 
+# 1. for individuals: that user is object owner OR
+# 2. for individuals: user has 'act' permission for 'obj' OR
+# 3. for teams: user belongs to team that has 'act' permission for 'obj' OR
+# 4. for depts: user belongs to dept that has 'act' for 'obj' OR
+# 5. for orgs: user belongs to org that has 'act' for 'obj' OR
+# 6. for org admins: user has 'admin' role for org with 'orgId'
+# 7. for public sharing: sub=0, obj=id_of_shared_item, act, pgrp='public'
+# To make this faster for shared files, the order of execution will be altered to move fns, and in clauses down
+[matchers]
+m = (p.sub == r.sub.UserId && p.act == r.act && p.obj == r.obj && p.pgrp == "%s") || \
+    (p.sub == r.sub.DeptId && p.act == r.act && p.obj == r.obj && p.pgrp == "%s") || \
+    (p.sub == r.sub.OrgId && p.act == r.act && p.obj == r.obj && p.pgrp == "%s") || \
+    (p.sub in r.sub.Teams && p.act == r.act && p.obj == r.obj && p.pgrp == "%s") || \
+    (p.sub == r.sub.UserId && g(p.act, r.act) && p.obj == r.obj && p.pgrp == "%s") || \
+    ("admin" in r.sub.Roles && p.orgId == r.sub.OrgId) || \
+	(p.sub == "0" && p.act == r.act && p.obj == r.obj && p.pgrp == "%s")
+`, User, Dept, Org, Team, User, Public)
 
 type RequestSub struct {
 	UserId, TeamId, DeptId, OrgId string
 	Roles                         []interface{}
 	Teams                         []interface{}
+}
+
+func AddOwnerRole(e *casbin.Enforcer) {
+	ownerPermissions := []string{"read", "write", "download", "share", "delete"}
+	for _, perm := range ownerPermissions {
+		hasGroupPolicy, err := e.HasNamedGroupingPolicy("g", "owner", perm)
+		if err != nil {
+			log.Fatalf("error checking named group policy for permission %s: %v", perm, err)
+			return
+		}
+		if !hasGroupPolicy {
+			isPolicyAdded, err := e.AddNamedGroupingPolicy("g", "owner", perm)
+			if err != nil {
+				log.Fatalf("couldn't add named group policy for permission %s: %v", perm, err)
+				return
+			}
+			fmt.Printf("is %s permission added for owner: %v\n", perm, isPolicyAdded)
+		}
+	}
 }
 
 func main() {
@@ -19,10 +83,27 @@ func main() {
 		fmt.Println("Error: ", err)
 	}
 	policyFile := currDir + "/config/policy.csv"
-	modelFile := currDir + "/config/model.CONF"
+	// modelFile := currDir + "/config/model.CONF"
+
+	m, err := model.NewModelFromString(ModelConf)
+	a := fileadapter.NewAdapter(policyFile)
+
+	if err != nil {
+		log.Fatalf("error: model: %s", err)
+		return
+	}
 
 	// casbin enforcer
-	e, _ := casbin.NewEnforcer(modelFile, policyFile)
+	// e, _ := casbin.NewEnforcer(modelFile, policyFile)
+	e, err := casbin.NewEnforcer(m, a)
+	if err != nil {
+		log.Fatalf("error: enforcer: %s", err)
+		return
+	}
+
+	// add the `owner` role via the casbin api
+	AddOwnerRole(e)
+
 
 	// test that UserId 1 has no read access to obj 3
 	// var roles []interface{}

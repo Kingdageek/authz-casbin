@@ -3,9 +3,3 @@ p, 1, 1, read, team, 1
 p, 2, 1, owner, user, 1
 p, 1, 2, read, org, 1
 p, 1, 2, download, org, 1
-
-g, owner, read
-g, owner, write,
-g, owner, download
-g, owner, share
-g, owner, delete
